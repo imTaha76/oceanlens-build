@@ -1,0 +1,6 @@
+{
+  "name": "OCEANLENS",
+  "description": "Production-quality interactive 3D Ocean Data Visualization System connecting to real Copernicus ocean model data in the Arabian Sea.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
