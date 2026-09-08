@@ -4,17 +4,15 @@
 
 import React from 'react';
 import {
-  Activity,
   Compass,
-  Database,
+  Grid,
   Layers,
   PanelLeft,
   PanelRight,
   Server,
-  Sliders,
-  Sparkles,
   Waves,
 } from 'lucide-react';
+import { DataSourceMode } from '../hooks/useOceanData';
 import { OceanMetadata } from '../types';
 
 interface HeaderProps {
@@ -23,6 +21,7 @@ interface HeaderProps {
   isConnecting: boolean;
   pingMs: number | null;
   apiUrl: string;
+  dataSourceMode: DataSourceMode;
   onOpenBackendConfig: () => void;
   onResetCamera: () => void;
   leftPanelOpen: boolean;
@@ -31,6 +30,8 @@ interface HeaderProps {
   setRightPanelOpen: (open: boolean) => void;
   crossSectionMode: boolean;
   setCrossSectionMode: (mode: boolean) => void;
+  showGridLines?: boolean;
+  onToggleGridLines?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   isConnecting,
   pingMs,
   apiUrl,
+  dataSourceMode,
   onOpenBackendConfig,
   onResetCamera,
   leftPanelOpen,
@@ -47,138 +49,140 @@ export const Header: React.FC<HeaderProps> = ({
   setRightPanelOpen,
   crossSectionMode,
   setCrossSectionMode,
+  showGridLines = true,
+  onToggleGridLines,
 }) => {
   return (
     <header
       id="oceanlens-header"
-      className="h-16 border-b border-slate-800/90 bg-slate-950/80 backdrop-blur-md px-4 flex items-center justify-between z-20 shrink-0 select-none"
+      className="h-13 border-b border-slate-800 bg-slate-900/95 px-4 flex items-center justify-between z-20 shrink-0 select-none text-slate-200"
     >
       {/* Brand Identity & Title */}
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3">
         <button
           id="toggle-left-panel-btn"
           onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-          className={`p-2 rounded-lg border transition-colors ${
+          className={`p-1.5 rounded-md border transition-colors ${
             leftPanelOpen
-              ? 'bg-cyan-950/80 border-cyan-700/60 text-cyan-300'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+              ? 'bg-slate-800 border-slate-600 text-slate-100'
+              : 'bg-slate-850 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
           }`}
-          title="Toggle Control Panel"
+          title="Toggle Controls Sidebar"
         >
           <PanelLeft className="w-4 h-4" />
         </button>
 
-        <div className="flex items-center gap-3">
-          {/* Logo Mark */}
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 via-sky-700 to-indigo-900 shadow-md shadow-cyan-950/50 border border-cyan-400/30">
-            <Waves className="w-5 h-5 text-cyan-100" />
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping opacity-75" />
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-cyan-400" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center text-sky-400">
+            <Waves className="w-4 h-4" />
           </div>
 
-          <div>
+          <div className="leading-tight">
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-extrabold tracking-wider text-white font-mono flex items-center gap-1.5">
-                OCEANLENS
-                <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 tracking-normal">
-                  SIH 2026
-                </span>
-              </h1>
+              <span className="text-sm font-semibold tracking-tight text-white">
+                OceanLens
+              </span>
+              <span className="text-[11px] text-slate-400 font-normal hidden sm:inline">
+                Arabian Sea Physical Oceanography
+              </span>
             </div>
-            <p className="text-[11px] font-medium text-slate-400">
-              3D Ocean Intelligence Platform • Copernicus Marine Model
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Dataset Summary Tags (Hidden on small screens) */}
-      <div className="hidden lg:flex items-center gap-2 text-[11px] font-mono">
-        <div className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300 flex items-center gap-1.5">
-          <Database className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Arabian Sea [10°–15°N, 65°–70°E]</span>
-        </div>
-        <div className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
-          Grid: <span className="text-slate-200">61×61 (1/12°)</span>
-        </div>
-        <div className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
-          Depths: <span className="text-slate-200">{metadata ? `${metadata.depths.length} Levels` : '26 Levels'}</span>
-        </div>
+      {/* Dataset Summary Meta (Subtle & clean) */}
+      <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 font-mono">
+        <span className="text-slate-300">10°–15°N, 65°–70°E</span>
+        <span className="text-slate-600">•</span>
+        <span>61×61 Grid (1/12°)</span>
+        <span className="text-slate-600">•</span>
+        <span>{metadata ? `${metadata.depths.length} Depths` : '26 Depths'}</span>
       </div>
 
-      {/* Header Actions & Live Connection Indicator */}
+      {/* Header Action Controls */}
       <div className="flex items-center gap-2">
-        {/* Reset Camera to Arabian Sea */}
+        {/* Recenter Camera */}
         <button
           id="recenter-camera-btn"
           onClick={onResetCamera}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-          title="Recenter Camera on Arabian Sea"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-slate-750 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-xs transition-colors"
+          title="Recenter 3D Globe to Arabian Sea"
         >
-          <Compass className="w-3.5 h-3.5 text-cyan-400" />
-          Focus Region
+          <Compass className="w-3.5 h-3.5 text-sky-400" />
+          <span>Center Region</span>
         </button>
 
-        {/* Vertical Cross-Section Toggle */}
+        {/* Transect Mode Toggle */}
         <button
           id="toggle-cross-section-btn"
           onClick={() => setCrossSectionMode(!crossSectionMode)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors border ${
             crossSectionMode
-              ? 'bg-amber-950/80 border-amber-600/80 text-amber-300 shadow-sm shadow-amber-950'
-              : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
+              ? 'bg-amber-950/60 border-amber-600 text-amber-200'
+              : 'border-slate-750 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white'
           }`}
-          title="Toggle Vertical Cross-Section Transect Mode"
+          title="Toggle Vertical Ocean Transect"
         >
           <Layers className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Cross-Section</span>
+          <span className="hidden sm:inline">Transect</span>
         </button>
 
-        {/* Live Backend Connection Indicator */}
+        {/* Grid Lines Toggle */}
+        {onToggleGridLines && (
+          <button
+            id="toggle-grid-lines-btn"
+            onClick={onToggleGridLines}
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors border ${
+              showGridLines
+                ? 'bg-slate-800 border-slate-600 text-slate-100'
+                : 'border-slate-750 bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200'
+            }`}
+            title="Toggle Earth & Model Grid"
+          >
+            <Grid className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Grid</span>
+          </button>
+        )}
+
+        {/* Data Engine Connection Status */}
         <button
           id="backend-status-indicator-btn"
           onClick={onOpenBackendConfig}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono transition-all ${
-            isConnected
-              ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300 hover:bg-emerald-950/80'
-              : isConnecting
-              ? 'bg-sky-950/60 border-sky-800/80 text-sky-300'
-              : 'bg-rose-950/60 border-rose-800/80 text-rose-300 hover:bg-rose-950/80'
-          }`}
-          title={`Backend: ${apiUrl} (Click to configure)`}
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-slate-750 bg-slate-800 hover:bg-slate-750 text-xs font-mono text-slate-300 transition-colors"
+          title="Data source settings"
         >
-          <span className="relative flex h-2 w-2">
-            {isConnected && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            )}
-            <span
-              className={`relative inline-flex rounded-full h-2 w-2 ${
-                isConnected ? 'bg-emerald-500' : isConnecting ? 'bg-sky-500' : 'bg-rose-500'
-              }`}
-            />
-          </span>
-
-          <span className="font-semibold text-[11px]">
-            {isConnected
-              ? `LIVE ${pingMs !== null ? `(${pingMs}ms)` : ''}`
+          <span
+            className={`w-2 h-2 rounded-full ${
+              dataSourceMode === 'embedded'
+                ? 'bg-sky-400'
+                : isConnected
+                ? 'bg-emerald-400'
+                : isConnecting
+                ? 'bg-amber-400'
+                : 'bg-rose-400'
+            }`}
+          />
+          <span className="text-[11px]">
+            {dataSourceMode === 'embedded'
+              ? 'Copernicus Reanalysis'
+              : isConnected
+              ? `Server (${pingMs ?? 0}ms)`
               : isConnecting
-              ? 'CONNECTING...'
-              : 'OFFLINE'}
+              ? 'Connecting...'
+              : 'Offline'}
           </span>
-
-          <Server className="w-3.5 h-3.5 opacity-70" />
         </button>
 
         {/* Toggle Right Panel */}
         <button
           id="toggle-right-panel-btn"
           onClick={() => setRightPanelOpen(!rightPanelOpen)}
-          className={`p-2 rounded-lg border transition-colors ${
+          className={`p-1.5 rounded-md border transition-colors ${
             rightPanelOpen
-              ? 'bg-cyan-950/80 border-cyan-700/60 text-cyan-300'
-              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+              ? 'bg-slate-800 border-slate-600 text-slate-100'
+              : 'bg-slate-850 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
           }`}
-          title="Toggle Analysis Inspector"
+          title="Toggle Analysis Panel"
         >
           <PanelRight className="w-4 h-4" />
         </button>

@@ -11,6 +11,10 @@ export interface OceanMetadata {
   times: string[];
   latitude_range: [number, number];
   longitude_range: [number, number];
+  name?: string;
+  region?: string;
+  bbox?: [number, number, number, number];
+  grid_resolution?: string;
 }
 
 export interface OceanSlice {
@@ -96,4 +100,83 @@ export interface VisualizationSettings {
   crossSectionMode: boolean;
   crossSectionType: 'latitudinal' | 'longitudinal';
   crossSectionCoordinate: number; // lat or lon value
+}
+
+export interface DebugPipelineInfo {
+  currentVariable: OceanVariable;
+  currentDepth: number;
+  currentTimeIndex: number;
+  currentTimeStr: string;
+  apiRequestUrl: string;
+  minValue: number | null;
+  maxValue: number | null;
+  meanValue: number | null;
+  unit: string;
+  lastRefreshTime: string;
+  dataSourceMode: 'backend' | 'embedded' | 'uploaded';
+  isConnected: boolean;
+  isConnecting: boolean;
+  connectionError: string | null;
+  latencyMs: number | null;
+}
+
+/**
+ * Geographic Model Grid Cell for interactive picking & 3D volume analysis
+ */
+export interface SelectedGridCell {
+  minLongitude: number;
+  maxLongitude: number;
+  minLatitude: number;
+  maxLatitude: number;
+  centerLongitude: number;
+  centerLatitude: number;
+  longitudeIndex: number;
+  latitudeIndex: number;
+}
+
+export interface DepthPoint {
+  depth: number;
+  thetao: number;
+  so: number;
+  uo: number;
+  vo: number;
+  magnitude: number;
+}
+
+export interface ObservationProfile {
+  id: string;
+  type: 'argo' | 'glider';
+  name: string;
+  platform: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  time: string;
+  depths: number[];
+  temperatures: (number | null)[];
+  salinities: (number | null)[];
+}
+
+export interface SubVolumeGrid {
+  lons: number[];
+  lats: number[];
+  depths: number[];
+  x: number[];
+  y: number[];
+  z: number[];
+  values: number[];
+  minVal: number;
+  maxVal: number;
+  variable: OceanVariable;
+  unit: string;
+}
+
+export interface CellVolumetricDataset {
+  cell: SelectedGridCell;
+  time: string;
+  timeIndex: number;
+  column: DepthPoint[];
+  subVolume: SubVolumeGrid;
+  argoObservations: ObservationProfile[];
+  gliderObservations: ObservationProfile[];
 }

@@ -23,6 +23,7 @@ interface LoadingOverlayProps {
   timeStr: string;
   onRetry: () => void;
   onOpenConfig: () => void;
+  onSwitchToEmbedded?: () => void;
 }
 
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
@@ -34,60 +35,73 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   timeStr,
   onRetry,
   onOpenConfig,
+  onSwitchToEmbedded,
 }) => {
-  // If backend is unavailable, show mandatory high-prominence error message
+  // If backend is unavailable, show friendly resolver options
   if (isBackendUnavailable) {
     return (
       <div
         id="backend-unavailable-overlay"
-        className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-6 pointer-events-auto"
+        className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-6 pointer-events-auto"
       >
-        <div className="max-w-lg w-full bg-slate-900 border border-rose-900/60 rounded-xl p-6 shadow-2xl space-y-4 text-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-rose-950/80 border border-rose-700/60 flex items-center justify-center text-rose-400 animate-pulse">
-            <AlertCircle className="w-7 h-7" />
+        <div className="max-w-lg w-full bg-slate-900 border border-slate-750 rounded-lg p-5 shadow-xl space-y-3.5 text-center">
+          <div className="w-10 h-10 mx-auto rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
+            <Database className="w-5 h-5" />
           </div>
 
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-bold text-slate-100 tracking-tight">
-              OceanLens backend unavailable — unable to load real ocean data.
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wide">
+              Copernicus Ocean Data Service
             </h2>
-            <p className="text-xs text-rose-300/80 font-mono">
-              {errorMessage || 'Cannot connect to FastAPI service at http://127.0.0.1:8000'}
+            <p className="text-xs text-amber-300 font-mono">
+              {errorMessage || 'FastAPI backend at 127.0.0.1:8000 is not currently responding.'}
             </p>
           </div>
 
-          <div className="text-xs text-slate-400 bg-slate-950 p-4 rounded-lg text-left space-y-2 border border-slate-800">
-            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-              <Database className="w-4 h-4 text-cyan-400" />
-              Copernicus Ocean Model Backend Requirement:
+          <div className="text-xs text-slate-300 bg-slate-850 p-3.5 rounded text-left space-y-2 border border-slate-800">
+            <div className="font-medium text-slate-200 flex items-center gap-1.5">
+              <Waves className="w-3.5 h-3.5 text-slate-400" />
+              Integrated Model:
             </div>
-            <p>
-              OCEANLENS visualizes real Copernicus ocean model data and strictly prohibits synthetic, fake, or mock values. Please ensure your FastAPI backend is running:
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Explore the Copernicus physical oceanography model for the Arabian Sea (61×61 grid, 26 depth levels, Potential Temperature, Salinity, and Surface Currents):
             </p>
-            <div className="bg-slate-900 p-2 rounded font-mono text-[11px] text-emerald-400 select-all border border-slate-800">
-              uvicorn main:app --reload --port 8000
+            {onSwitchToEmbedded && (
+              <button
+                id="explore-embedded-btn"
+                onClick={onSwitchToEmbedded}
+                className="w-full py-1.5 bg-slate-800 hover:bg-slate-750 text-white rounded text-xs font-medium flex items-center justify-center gap-2 border border-slate-700 transition-colors cursor-pointer"
+              >
+                <Waves className="w-3.5 h-3.5" />
+                Explore Copernicus Arabian Sea Model
+              </button>
+            )}
+            <div className="pt-2 border-t border-slate-800">
+              <span className="text-[11px] text-slate-400 block font-medium mb-1">
+                Or launch your local FastAPI server in terminal:
+              </span>
+              <div className="bg-slate-950 p-1.5 rounded font-mono text-[11px] text-emerald-400 select-all border border-slate-800">
+                cd backend && uvicorn main:app --reload --port 8000
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Verify endpoint availability at <code className="text-slate-300">GET /metadata</code> and <code className="text-slate-300">GET /slice</code> with CORS enabled.
-            </p>
           </div>
 
-          <div className="flex items-center justify-center gap-3 pt-2">
+          <div className="flex items-center justify-center gap-2 pt-1">
             <button
               id="retry-fetch-btn"
               onClick={onRetry}
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-900/30 transition-colors"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors border border-slate-700"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-3.5 h-3.5" />
               Retry Connection
             </button>
             <button
               id="open-config-btn"
               onClick={onOpenConfig}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors border border-slate-700"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors border border-slate-700"
             >
-              <Settings className="w-4 h-4" />
-              Configure API URL
+              <Settings className="w-3.5 h-3.5" />
+              Settings
             </button>
           </div>
         </div>
@@ -95,25 +109,21 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
     );
   }
 
-  // If loading a slice, show floating scientific loader in top-right or center
+  // If loading a slice, show floating scientific loader
   if (isLoading) {
     const config = VARIABLE_CONFIGS[variable];
     return (
       <div
         id="slice-loading-indicator"
-        className="absolute top-20 right-6 z-30 pointer-events-none"
+        className="absolute top-16 right-4 z-30 pointer-events-none"
       >
-        <div className="bg-slate-900/90 border border-cyan-800/80 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs">
-          <div className="relative flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
-            <Waves className="w-3 h-3 text-cyan-400 absolute" />
-          </div>
+        <div className="bg-slate-900 border border-slate-750 rounded px-3 py-2 shadow-lg flex items-center gap-2.5 text-xs">
+          <div className="w-4 h-4 border-2 border-slate-600 border-t-slate-200 rounded-full animate-spin" />
           <div>
-            <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-              <span>Streaming Copernicus Slice</span>
-              <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
+            <div className="font-medium text-slate-200 text-[11px]">
+              Loading Slice
             </div>
-            <div className="text-[11px] font-mono text-cyan-300">
+            <div className="text-[10px] font-mono text-slate-400">
               {config?.code} | z={depth}m | {timeStr ? timeStr.slice(0, 10) : 'T0'}
             </div>
           </div>

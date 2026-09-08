@@ -29,13 +29,14 @@ export const COLOR_PALETTES: Record<ColorPaletteId, { name: string; stops: Color
     ],
   },
   viridis: {
-    name: 'Viridis (Current Velocity)',
+    name: 'Velocity Gradient (Blue → Cyan → Green → Yellow → Red)',
     stops: [
-      { stop: 0.0, r: 68, g: 1, b: 84 },     // dark purple
-      { stop: 0.25, r: 59, g: 82, b: 139 },  // blue
-      { stop: 0.5, r: 33, g: 145, b: 140 },  // teal
-      { stop: 0.75, r: 94, g: 201, b: 98 },  // light green
-      { stop: 1.0, r: 253, g: 231, b: 37 },  // yellow
+      { stop: 0.0, r: 30, g: 64, b: 175 },   // blue
+      { stop: 0.2, r: 6, g: 182, b: 212 },   // cyan
+      { stop: 0.45, r: 34, g: 197, b: 94 },  // green
+      { stop: 0.7, r: 234, g: 179, b: 8 },   // yellow
+      { stop: 0.88, r: 249, g: 115, b: 22 }, // orange
+      { stop: 1.0, r: 220, g: 38, b: 38 },   // red
     ],
   },
   plasma: {

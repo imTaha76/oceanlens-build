@@ -15,6 +15,12 @@ let activeApiUrl: string =
     ? localStorage.getItem('oceanlens_api_url') || DEFAULT_API_URL
     : DEFAULT_API_URL;
 
+let lastRequestUrl: string = `${DEFAULT_API_URL}/slice?variable=thetao&depth=0.5&time_index=0`;
+
+export function getLastApiRequestUrl(): string {
+  return lastRequestUrl;
+}
+
 export function getApiBaseUrl(): string {
   return activeApiUrl;
 }
@@ -142,6 +148,7 @@ export async function getOceanSlice(
     time_index: String(timeIndex),
   });
   const url = `${activeApiUrl}/slice?${query.toString()}`;
+  lastRequestUrl = url;
 
   try {
     const controller = new AbortController();
@@ -185,4 +192,42 @@ export async function getOceanSlice(
       true
     );
   }
+}
+
+/**
+ * Fetches vertical depth column for a specific coordinate
+ * Attempts FastAPI backend /model/column, fallback to embedded Copernicus engine
+ */
+export async function getModelColumn(
+  lat: number,
+  lon: number,
+  timeIndex: number,
+  variable: string = 'thetao'
+): Promise<any> {
+  const query = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+    time_index: String(timeIndex),
+    variable,
+  });
+  const url = `${activeApiUrl}/model/column?${query.toString()}`;
+  lastRequestUrl = url;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Graceful fallback to client-side model engine
+  }
+  return null;
 }

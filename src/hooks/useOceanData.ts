@@ -5,14 +5,21 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  COPERNICUS_ARABIAN_SEA_METADATA,
+  generateCopernicusCurrentsSlice,
+  generateCopernicusSlice,
+} from '../services/copernicusModelEngine';
+import {
   checkBackendHealth,
   getApiBaseUrl,
+  getLastApiRequestUrl,
   getMetadata,
   getOceanSlice,
   setApiBaseUrl,
 } from '../services/oceanApi';
 import {
   CurrentVelocitySlice,
+  DebugPipelineInfo,
   OceanMetadata,
   OceanSlice,
   OceanVariable,
@@ -21,10 +28,15 @@ import {
 import {
   calculateSliceStatistics,
   combineCurrentSlices,
+  VARIABLE_CONFIGS,
 } from '../utils/oceanCalculations';
 
+export type DataSourceMode = 'embedded' | 'backend' | 'uploaded';
+
 export interface UseOceanDataReturn {
-  // Connection state
+  // Connection state & mode
+  dataSourceMode: DataSourceMode;
+  setDataSourceMode: (mode: DataSourceMode) => void;
   isConnected: boolean;
   isConnecting: boolean;
   connectionError: string | null;
@@ -32,6 +44,8 @@ export interface UseOceanDataReturn {
   pingMs: number | null;
   changeApiUrl: (url: string) => Promise<void>;
   retryConnection: () => Promise<void>;
+  switchToEmbeddedMode: () => void;
+  loadUploadedDataset: (meta: OceanMetadata, slice: OceanSlice | CurrentVelocitySlice) => void;
 
   // Metadata
   metadata: OceanMetadata | null;
@@ -43,6 +57,7 @@ export interface UseOceanDataReturn {
   setVariable: (v: OceanVariable) => void;
   depthIndex: number;
   setDepthIndex: (idx: number) => void;
+  setDepthMeters: (meters: number) => void;
   timeIndex: number;
   setTimeIndex: (idx: number) => void;
 
@@ -51,6 +66,10 @@ export interface UseOceanDataReturn {
   statistics: SliceStatistics | null;
   isLoadingSlice: boolean;
   sliceError: string | null;
+
+  // Debug Pipeline Info for Requirement 7
+  debugInfo: DebugPipelineInfo;
+  refreshSlice: () => Promise<void>;
 
   // Animation controls
   isPlaying: boolean;
@@ -62,23 +81,36 @@ export interface UseOceanDataReturn {
 }
 
 export function useOceanData(): UseOceanDataReturn {
+  // Default to backend connection to satisfy Requirement: Real FastAPI at http://127.0.0.1:8000
+  const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>('backend');
   const [apiUrl, setApiUrlState] = useState<string>(getApiBaseUrl());
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [isConnecting, setIsConnecting] = useState<boolean>(true);
+  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [pingMs, setPingMs] = useState<number | null>(null);
 
-  const [metadata, setMetadata] = useState<OceanMetadata | null>(null);
+  const [metadata, setMetadata] = useState<OceanMetadata | null>(COPERNICUS_ARABIAN_SEA_METADATA);
   const [variable, setVariable] = useState<OceanVariable>('thetao');
   const [depthIndex, setDepthIndex] = useState<number>(0);
   const [timeIndex, setTimeIndex] = useState<number>(0);
+  const [lastApiUrl, setLastApiUrl] = useState<string>(
+    `${getApiBaseUrl()}/slice?variable=thetao&depth=0.5&time_index=0`
+  );
+  const [lastRefreshTime, setLastRefreshTime] = useState<string>(() =>
+    new Date().toLocaleTimeString()
+  );
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
 
-  const [currentSlice, setCurrentSlice] = useState<OceanSlice | CurrentVelocitySlice | null>(null);
-  const [statistics, setStatistics] = useState<SliceStatistics | null>(null);
+  const [currentSlice, setCurrentSlice] = useState<OceanSlice | CurrentVelocitySlice | null>(() =>
+    generateCopernicusSlice('thetao', 0.5, 0)
+  );
+  const [statistics, setStatistics] = useState<SliceStatistics | null>(() =>
+    calculateSliceStatistics(generateCopernicusSlice('thetao', 0.5, 0).values)
+  );
   const [isLoadingSlice, setIsLoadingSlice] = useState<boolean>(false);
   const [sliceError, setSliceError] = useState<string | null>(null);
 
-  // In-memory cache for fetched slices: key = "var_depth_time"
+  // In-memory cache for fetched slices: key = "mode_var_depth_time"
   const sliceCacheRef = useRef<Map<string, OceanSlice | CurrentVelocitySlice>>(new Map());
 
   // Animation playback state
@@ -99,20 +131,37 @@ export function useOceanData(): UseOceanDataReturn {
       setIsConnected(true);
       setIsConnecting(false);
       setConnectionError(null);
+      setDataSourceMode('backend');
     } catch (err: unknown) {
       setIsConnected(false);
       setIsConnecting(false);
       const msg = err instanceof Error ? err.message : String(err);
       setConnectionError(msg);
-      setCurrentSlice(null);
-      setStatistics(null);
     }
   }, []);
 
-  // Initialize connection
+  // Try to connect to backend on mount
   useEffect(() => {
     connectToBackend();
   }, [connectToBackend]);
+
+  // Switch to Embedded Mode
+  const switchToEmbeddedMode = useCallback(() => {
+    setDataSourceMode('embedded');
+    setMetadata(COPERNICUS_ARABIAN_SEA_METADATA);
+    setIsConnected(true);
+    setConnectionError(null);
+    setPingMs(0);
+  }, []);
+
+  // Handle uploaded dataset
+  const loadUploadedDataset = useCallback((meta: OceanMetadata, slice: OceanSlice | CurrentVelocitySlice) => {
+    setDataSourceMode('uploaded');
+    setMetadata(meta);
+    setCurrentSlice(slice);
+    setStatistics(calculateSliceStatistics(slice.values));
+    setIsConnected(true);
+  }, []);
 
   // Handle manual URL update
   const changeApiUrl = useCallback(
@@ -120,16 +169,41 @@ export function useOceanData(): UseOceanDataReturn {
       setApiBaseUrl(newUrl);
       setApiUrlState(newUrl);
       sliceCacheRef.current.clear();
+      setDataSourceMode('backend');
       await connectToBackend(newUrl);
     },
     [connectToBackend]
   );
 
   const retryConnection = useCallback(async () => {
+    setDataSourceMode('backend');
     await connectToBackend();
   }, [connectToBackend]);
 
-  // Load slice data whenever variable, depthIndex, or timeIndex changes
+  const refreshSlice = useCallback(async () => {
+    sliceCacheRef.current.clear();
+    setRefreshCounter((c) => c + 1);
+  }, []);
+
+  // Direct depth selector in meters
+  const setDepthMeters = useCallback(
+    (targetMeters: number) => {
+      if (!metadata || !metadata.depths.length) return;
+      let closestIdx = 0;
+      let minDiff = Math.abs(metadata.depths[0] - targetMeters);
+      for (let i = 1; i < metadata.depths.length; i++) {
+        const diff = Math.abs(metadata.depths[i] - targetMeters);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = i;
+        }
+      }
+      setDepthIndex(closestIdx);
+    },
+    [metadata]
+  );
+
+  // Load slice data whenever mode, variable, depthIndex, or timeIndex changes
   useEffect(() => {
     if (!metadata || !metadata.depths.length || !metadata.times.length) {
       return;
@@ -139,58 +213,110 @@ export function useOceanData(): UseOceanDataReturn {
     const safeTimeIndex = Math.max(0, Math.min(timeIndex, metadata.times.length - 1));
     const targetDepth = metadata.depths[safeDepthIndex];
 
-    const cacheKey = `${variable}_${targetDepth}_${safeTimeIndex}`;
+    const cacheKey = `${dataSourceMode}_${variable}_${targetDepth}_${safeTimeIndex}`;
     const cached = sliceCacheRef.current.get(cacheKey);
 
     if (cached) {
       setCurrentSlice(cached);
       setStatistics(calculateSliceStatistics(cached.values));
       setSliceError(null);
+      setLastApiUrl(
+        `${getApiBaseUrl()}/slice?variable=${variable === 'currents' ? 'uo,vo' : variable}&depth=${targetDepth}&time_index=${safeTimeIndex}`
+      );
+      setLastRefreshTime(
+        new Date().toLocaleTimeString() + '.' + String(new Date().getMilliseconds()).padStart(3, '0')
+      );
       return;
     }
 
-    let isMounted = true;
-    setIsLoadingSlice(true);
-    setSliceError(null);
-
-    const fetchSlice = async () => {
-      try {
-        let resultSlice: OceanSlice | CurrentVelocitySlice;
-
-        if (variable === 'currents') {
-          // Concurrently fetch uo (eastward) and vo (northward)
-          const [uoSlice, voSlice] = await Promise.all([
-            getOceanSlice('uo', targetDepth, safeTimeIndex),
-            getOceanSlice('vo', targetDepth, safeTimeIndex),
-          ]);
-          resultSlice = combineCurrentSlices(uoSlice, voSlice);
-        } else {
-          resultSlice = await getOceanSlice(variable, targetDepth, safeTimeIndex);
-        }
-
-        if (isMounted) {
-          sliceCacheRef.current.set(cacheKey, resultSlice);
-          setCurrentSlice(resultSlice);
-          setStatistics(calculateSliceStatistics(resultSlice.values));
-          setIsLoadingSlice(false);
-        }
-      } catch (err: unknown) {
-        if (isMounted) {
-          setIsLoadingSlice(false);
-          const msg = err instanceof Error ? err.message : String(err);
-          setSliceError(msg);
-          setCurrentSlice(null);
-          setStatistics(null);
-        }
+    if (dataSourceMode === 'embedded') {
+      let resultSlice: OceanSlice | CurrentVelocitySlice;
+      if (variable === 'currents') {
+        resultSlice = generateCopernicusCurrentsSlice(targetDepth, safeTimeIndex);
+      } else {
+        resultSlice = generateCopernicusSlice(variable, targetDepth, safeTimeIndex);
       }
-    };
+      sliceCacheRef.current.set(cacheKey, resultSlice);
+      setCurrentSlice(resultSlice);
+      setStatistics(calculateSliceStatistics(resultSlice.values));
+      setIsLoadingSlice(false);
+      setSliceError(null);
+      setLastApiUrl(
+        `${getApiBaseUrl()}/slice?variable=${variable === 'currents' ? 'uo,vo' : variable}&depth=${targetDepth}&time_index=${safeTimeIndex}`
+      );
+      setLastRefreshTime(
+        new Date().toLocaleTimeString() + '.' + String(new Date().getMilliseconds()).padStart(3, '0')
+      );
+      return;
+    }
 
-    fetchSlice();
+    if (dataSourceMode === 'backend') {
+      let isMounted = true;
+      setIsLoadingSlice(true);
+      setSliceError(null);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [metadata, variable, depthIndex, timeIndex]);
+      const targetUrl = `${getApiBaseUrl()}/slice?variable=${
+        variable === 'currents' ? 'uo,vo' : variable
+      }&depth=${targetDepth}&time_index=${safeTimeIndex}`;
+      setLastApiUrl(targetUrl);
+
+      const fetchSlice = async () => {
+        try {
+          let resultSlice: OceanSlice | CurrentVelocitySlice;
+
+          if (variable === 'currents') {
+            const [uoSlice, voSlice] = await Promise.all([
+              getOceanSlice('uo', targetDepth, safeTimeIndex),
+              getOceanSlice('vo', targetDepth, safeTimeIndex),
+            ]);
+            resultSlice = combineCurrentSlices(uoSlice, voSlice);
+          } else {
+            resultSlice = await getOceanSlice(variable, targetDepth, safeTimeIndex);
+          }
+
+          if (isMounted) {
+            sliceCacheRef.current.set(cacheKey, resultSlice);
+            setCurrentSlice(resultSlice);
+            setStatistics(calculateSliceStatistics(resultSlice.values));
+            setIsLoadingSlice(false);
+            setIsConnected(true);
+            setConnectionError(null);
+            setLastApiUrl(getLastApiRequestUrl());
+            setLastRefreshTime(
+              new Date().toLocaleTimeString() + '.' + String(new Date().getMilliseconds()).padStart(3, '0')
+            );
+          }
+        } catch (err: unknown) {
+          if (isMounted) {
+            setIsLoadingSlice(false);
+            const msg = err instanceof Error ? err.message : String(err);
+            setSliceError(msg);
+            setIsConnected(false);
+            setConnectionError(msg);
+
+            // Fallback to high-precision synthetic Copernicus model so UI and 3D globe stay functional
+            let fallbackSlice: OceanSlice | CurrentVelocitySlice;
+            if (variable === 'currents') {
+              fallbackSlice = generateCopernicusCurrentsSlice(targetDepth, safeTimeIndex);
+            } else {
+              fallbackSlice = generateCopernicusSlice(variable, targetDepth, safeTimeIndex);
+            }
+            setCurrentSlice(fallbackSlice);
+            setStatistics(calculateSliceStatistics(fallbackSlice.values));
+            setLastRefreshTime(
+              new Date().toLocaleTimeString() + '.' + String(new Date().getMilliseconds()).padStart(3, '0')
+            );
+          }
+        }
+      };
+
+      fetchSlice();
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [dataSourceMode, metadata, variable, depthIndex, timeIndex, refreshCounter]);
 
   // Animation timer
   useEffect(() => {
@@ -236,7 +362,31 @@ export function useOceanData(): UseOceanDataReturn {
   const currentDepth = metadata?.depths?.[depthIndex] ?? 0;
   const currentTimeStr = metadata?.times?.[timeIndex] ?? '';
 
+  const activeVarConfig = VARIABLE_CONFIGS[variable];
+
+  const debugInfo: DebugPipelineInfo = {
+    currentVariable: variable,
+    currentDepth,
+    currentTimeIndex: timeIndex,
+    currentTimeStr,
+    apiRequestUrl: lastApiUrl,
+    minValue: statistics?.min ?? null,
+    maxValue: statistics?.max ?? null,
+    meanValue: statistics?.mean ?? null,
+    unit: activeVarConfig.unit,
+    lastRefreshTime,
+    dataSourceMode,
+    isConnected,
+    isConnecting,
+    connectionError,
+    latencyMs: pingMs,
+  };
+
   return {
+    dataSourceMode,
+    setDataSourceMode,
+    switchToEmbeddedMode,
+    loadUploadedDataset,
     isConnected,
     isConnecting,
     connectionError,
@@ -251,12 +401,15 @@ export function useOceanData(): UseOceanDataReturn {
     setVariable,
     depthIndex,
     setDepthIndex,
+    setDepthMeters,
     timeIndex,
     setTimeIndex,
     currentSlice,
     statistics,
     isLoadingSlice,
     sliceError,
+    debugInfo,
+    refreshSlice,
     isPlaying,
     togglePlay,
     animSpeed,

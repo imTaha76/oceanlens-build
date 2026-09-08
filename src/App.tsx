@@ -10,13 +10,15 @@ import React, { useState } from 'react';
 import { BackendConfigModal } from './components/BackendConfigModal';
 import { ControlPanel } from './components/ControlPanel';
 import { CrossSectionModal } from './components/CrossSectionModal';
+import { DebugPanel } from './components/DebugPanel';
 import { Header } from './components/Header';
 import { InformationPanel } from './components/InformationPanel';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { OceanGlobe } from './components/OceanGlobe';
 import { Timeline } from './components/Timeline';
+import { VolumetricViewer } from './components/VolumetricViewer';
 import { useOceanData } from './hooks/useOceanData';
-import { ProbePoint, VisualizationSettings } from './types';
+import { ProbePoint, SelectedGridCell, VisualizationSettings } from './types';
 
 export default function App() {
   const ocean = useOceanData();
@@ -49,23 +51,29 @@ export default function App() {
   const [probePoint, setProbePoint] = useState<ProbePoint | null>(null);
   const [resetCameraCount, setResetCameraCount] = useState<number>(0);
 
+  // Interactive Ocean Model Grid Cell & 3D Volumetric View State
+  const [selectedGridCell, setSelectedGridCell] = useState<SelectedGridCell | null>(null);
+  const [isVolumetricOpen, setIsVolumetricOpen] = useState<boolean>(false);
+
+  const handleSelectGridCell = (cell: SelectedGridCell | null) => {
+    setSelectedGridCell(cell);
+    if (cell) {
+      setIsVolumetricOpen(true);
+    }
+  };
+
   // Sync settings when variable, depth, or time change from hook or UI
   const handleUpdateSettings = (partial: Partial<VisualizationSettings>) => {
-    setSettings((prev) => {
-      const updated = { ...prev, ...partial };
-
-      if (partial.variable !== undefined && partial.variable !== prev.variable) {
-        ocean.setVariable(partial.variable);
-      }
-      if (partial.depthIndex !== undefined && partial.depthIndex !== prev.depthIndex) {
-        ocean.setDepthIndex(partial.depthIndex);
-      }
-      if (partial.timeIndex !== undefined && partial.timeIndex !== prev.timeIndex) {
-        ocean.setTimeIndex(partial.timeIndex);
-      }
-
-      return updated;
-    });
+    if (partial.variable !== undefined && partial.variable !== ocean.variable) {
+      ocean.setVariable(partial.variable);
+    }
+    if (partial.depthIndex !== undefined && partial.depthIndex !== ocean.depthIndex) {
+      ocean.setDepthIndex(partial.depthIndex);
+    }
+    if (partial.timeIndex !== undefined && partial.timeIndex !== ocean.timeIndex) {
+      ocean.setTimeIndex(partial.timeIndex);
+    }
+    setSettings((prev) => ({ ...prev, ...partial }));
   };
 
   // Keep hook indices aligned with settings
@@ -83,6 +91,7 @@ export default function App() {
         isConnecting={ocean.isConnecting}
         pingMs={ocean.pingMs}
         apiUrl={ocean.apiUrl}
+        dataSourceMode={ocean.dataSourceMode}
         onOpenBackendConfig={() => setBackendConfigOpen(true)}
         onResetCamera={() => setResetCameraCount((c) => c + 1)}
         leftPanelOpen={leftPanelOpen}
@@ -91,6 +100,8 @@ export default function App() {
         setRightPanelOpen={setRightPanelOpen}
         crossSectionMode={settings.crossSectionMode}
         setCrossSectionMode={(val) => handleUpdateSettings({ crossSectionMode: val })}
+        showGridLines={settings.showGridLines}
+        onToggleGridLines={() => handleUpdateSettings({ showGridLines: !settings.showGridLines })}
       />
 
       {/* 2. MAIN 3D WORKSPACE LAYOUT */}
@@ -126,20 +137,45 @@ export default function App() {
             }}
             probePoint={probePoint}
             onProbeLocation={setProbePoint}
+            selectedGridCell={selectedGridCell}
+            onSelectGridCell={handleSelectGridCell}
             crossSectionCoordinate={settings.crossSectionCoordinate}
             resetCameraTrigger={resetCameraCount}
+          />
+
+          {/* Real-time Data Pipeline Debug Inspector (Requirement 7) */}
+          <DebugPanel
+            debugInfo={ocean.debugInfo}
+            onSelectVariable={(v) => handleUpdateSettings({ variable: v })}
+            onSelectDepth={ocean.setDepthMeters}
+            onSetTimeIndex={handleTimelineChange}
+            isPlaying={ocean.isPlaying}
+            onTogglePlay={ocean.togglePlay}
+            onRefresh={ocean.refreshSlice}
+          />
+
+          {/* Dedicated 3D Volumetric Ocean Data Viewer (Requirement: Interactive Ocean Data Grid) */}
+          <VolumetricViewer
+            isOpen={isVolumetricOpen && !!selectedGridCell}
+            onClose={() => setIsVolumetricOpen(false)}
+            cell={selectedGridCell}
+            metadata={ocean.metadata}
+            activeTimeIndex={ocean.timeIndex}
+            activeVariable={ocean.variable}
+            onVariableChange={(v) => handleUpdateSettings({ variable: v })}
           />
 
           {/* Loading & Connection Error Overlays */}
           <LoadingOverlay
             isLoading={ocean.isLoadingSlice}
-            isBackendUnavailable={!ocean.isConnected && !ocean.isConnecting}
+            isBackendUnavailable={!ocean.isConnected && !ocean.isConnecting && !ocean.currentSlice}
             errorMessage={ocean.connectionError}
             variable={ocean.variable}
             depth={ocean.currentDepth}
             timeStr={ocean.currentTimeStr}
             onRetry={ocean.retryConnection}
             onOpenConfig={() => setBackendConfigOpen(true)}
+            onSwitchToEmbedded={ocean.switchToEmbeddedMode}
           />
 
           {/* Vertical Ocean Cross-Section Drawer/Modal */}
@@ -195,8 +231,11 @@ export default function App() {
         isConnecting={ocean.isConnecting}
         pingMs={ocean.pingMs}
         connectionError={ocean.connectionError}
+        dataSourceMode={ocean.dataSourceMode}
+        onSelectMode={ocean.setDataSourceMode}
         onSaveUrl={ocean.changeApiUrl}
         onRetry={ocean.retryConnection}
+        onLoadDataset={ocean.loadUploadedDataset}
       />
     </div>
   );
