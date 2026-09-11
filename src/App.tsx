@@ -251,6 +251,8 @@ export default function App() {
         isConnecting={ocean.isConnecting}
         pingMs={ocean.pingMs}
         connectionError={ocean.connectionError}
+        dataSourceMode={ocean.dataSourceMode}
+        onSelectMode={ocean.setDataSourceMode}
         onSaveUrl={ocean.changeApiUrl}
         onRetry={ocean.retryConnection}
       />

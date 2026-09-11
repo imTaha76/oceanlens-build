@@ -1689,7 +1689,7 @@ export const OceanGlobe: React.FC<OceanGlobeProps> = ({
               <span>
                 {VARIABLE_CONFIGS[
                   settings.variable
-                ].label}
+                ].name}
               </span>
               <span className="font-mono text-cyan-300">
                 {VARIABLE_CONFIGS[

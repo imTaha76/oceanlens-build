@@ -25,6 +25,8 @@ import {
   combineCurrentSlices,
 } from '../utils/oceanCalculations';
 
+export type DataSourceMode = 'backend' | 'embedded' | 'uploaded';
+
 export interface UseOceanDataReturn {
   // Connection state
   isConnected: boolean;
@@ -34,6 +36,8 @@ export interface UseOceanDataReturn {
   pingMs: number | null;
   changeApiUrl: (url: string) => Promise<void>;
   retryConnection: () => Promise<void>;
+  dataSourceMode: DataSourceMode;
+  setDataSourceMode: (mode: DataSourceMode) => void;
 
   // Metadata
   metadata: OceanMetadata | null;
@@ -74,6 +78,7 @@ export function useOceanData(): UseOceanDataReturn {
   const [isConnecting, setIsConnecting] = useState<boolean>(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [pingMs, setPingMs] = useState<number | null>(null);
+  const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>('backend');
 
   const [metadata, setMetadata] = useState<OceanMetadata | null>(null);
   const [variable, setVariable] = useState<OceanVariable>('thetao');
@@ -322,6 +327,8 @@ export function useOceanData(): UseOceanDataReturn {
     pingMs,
     changeApiUrl,
     retryConnection,
+    dataSourceMode,
+    setDataSourceMode,
     metadata,
     currentDepth,
     currentTimeStr,
