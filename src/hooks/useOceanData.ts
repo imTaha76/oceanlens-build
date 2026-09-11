@@ -9,6 +9,7 @@ import {
   getApiBaseUrl,
   getMetadata,
   getOceanSlice,
+  getOceanVolume,
   setApiBaseUrl,
 } from '../services/oceanApi';
 import {
@@ -16,8 +17,9 @@ import {
   OceanMetadata,
   OceanSlice,
   OceanVariable,
+  OceanVolume,
   SliceStatistics,
-} from '../types';
+} from '../types'; 
 import {
   calculateSliceStatistics,
   combineCurrentSlices,
@@ -52,6 +54,11 @@ export interface UseOceanDataReturn {
   isLoadingSlice: boolean;
   sliceError: string | null;
 
+  // 3D volume
+currentVolume: OceanVolume | null;
+isLoadingVolume: boolean;
+volumeError: string | null;
+
   // Animation controls
   isPlaying: boolean;
   togglePlay: () => void;
@@ -77,9 +84,15 @@ export function useOceanData(): UseOceanDataReturn {
   const [statistics, setStatistics] = useState<SliceStatistics | null>(null);
   const [isLoadingSlice, setIsLoadingSlice] = useState<boolean>(false);
   const [sliceError, setSliceError] = useState<string | null>(null);
+//Added
+  const [currentVolume, setCurrentVolume] = useState<OceanVolume | null>(null);
+  const [isLoadingVolume, setIsLoadingVolume] = useState<boolean>(false);
+  const [volumeError, setVolumeError] = useState<string | null>(null);
 
   // In-memory cache for fetched slices: key = "var_depth_time"
   const sliceCacheRef = useRef<Map<string, OceanSlice | CurrentVelocitySlice>>(new Map());
+  // In-memory cache for fetched 3D volumes: key = "var_time"
+  const volumeCacheRef = useRef<Map<string, OceanVolume>>(new Map());
 
   // Animation playback state
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -120,6 +133,7 @@ export function useOceanData(): UseOceanDataReturn {
       setApiBaseUrl(newUrl);
       setApiUrlState(newUrl);
       sliceCacheRef.current.clear();
+      volumeCacheRef.current.clear();
       await connectToBackend(newUrl);
     },
     [connectToBackend]
@@ -191,7 +205,71 @@ export function useOceanData(): UseOceanDataReturn {
       isMounted = false;
     };
   }, [metadata, variable, depthIndex, timeIndex]);
+    // Load 3D volume whenever variable or time changes
+  useEffect(() => {
+    if (!metadata || !metadata.times.length) {
+      return;
+    }
 
+    const safeTimeIndex = Math.max(
+      0,
+      Math.min(timeIndex, metadata.times.length - 1)
+    );
+
+    // Currents are handled separately later.
+    // For the first volume implementation, use scalar variables only.
+    if (variable === 'currents') {
+      setCurrentVolume(null);
+      setVolumeError(null);
+      return;
+    }
+
+    const cacheKey = `${variable}_${safeTimeIndex}`;
+    const cached = volumeCacheRef.current.get(cacheKey);
+
+    if (cached) {
+      setCurrentVolume(cached);
+      setVolumeError(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    setIsLoadingVolume(true);
+    setVolumeError(null);
+
+    const fetchVolume = async () => {
+      try {
+        const resultVolume = await getOceanVolume(
+          variable,
+          safeTimeIndex
+        );
+
+        if (isMounted) {
+          volumeCacheRef.current.set(cacheKey, resultVolume);
+          setCurrentVolume(resultVolume);
+          setIsLoadingVolume(false);
+          setVolumeError(null);
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          setIsLoadingVolume(false);
+
+          const msg =
+            err instanceof Error ? err.message : String(err);
+
+          setVolumeError(msg);
+          setCurrentVolume(null);
+        }
+      }
+    };
+
+    fetchVolume();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [metadata, variable, timeIndex]);
   // Animation timer
   useEffect(() => {
     if (!isPlaying || !metadata || metadata.times.length <= 1) {
@@ -257,6 +335,9 @@ export function useOceanData(): UseOceanDataReturn {
     statistics,
     isLoadingSlice,
     sliceError,
+    currentVolume,
+    isLoadingVolume,
+    volumeError,
     isPlaying,
     togglePlay,
     animSpeed,

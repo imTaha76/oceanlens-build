@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* Force sharp corners across all standard Tailwind radius utilities */
+@theme {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-full: 0px;
+}
+
+/* Universal rule to enforce sharp edges on all elements */
+*, ::before, ::after {
+  border-radius: 0px !important;
+}
+
 @layer utilities {
   /* Custom scientific dark scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
@@ -11,7 +28,7 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(51, 65, 85, 0.8);
-    border-radius: 4px;
+    border-radius: 0px !important;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(14, 165, 233, 0.6);

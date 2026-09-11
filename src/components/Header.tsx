@@ -13,7 +13,6 @@ import {
   Server,
   Sliders,
   Sparkles,
-  Waves,
 } from 'lucide-react';
 import { OceanMetadata } from '../types';
 
@@ -71,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           {/* Logo Mark */}
           <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-600 via-sky-700 to-indigo-900 shadow-md shadow-cyan-950/50 border border-cyan-400/30">
-            <Waves className="w-5 h-5 text-cyan-100" />
+            <img src="/assets/oceanlens-logo.svg" alt="OceanLens" className="w-full h-full object-cover rounded-xl" />
             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping opacity-75" />
             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-cyan-400" />
           </div>

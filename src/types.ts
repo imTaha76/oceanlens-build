@@ -21,6 +21,20 @@ export interface OceanSlice {
   longitude: number[];
   values: (number | null)[][];
 }
+//  Added 
+export interface OceanVolume {
+  variable: string;
+  time: string;
+
+  // Coordinate axes
+  depth: number[];
+  latitude: number[];
+  longitude: number[];
+
+  // 3D values:
+  // values[depth][latitude][longitude]
+  values: (number | null)[][][];
+}
 
 export interface CurrentVelocitySlice extends OceanSlice {
   variable: 'currents';

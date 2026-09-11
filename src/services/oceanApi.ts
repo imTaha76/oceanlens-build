@@ -3,7 +3,7 @@
  * Connects directly to FastAPI backend service
  */
 
-import { OceanMetadata, OceanSlice } from '../types';
+import { OceanMetadata, OceanSlice, OceanVolume } from '../types';
 
 // Default FastAPI backend URL
 const DEFAULT_API_URL =
@@ -182,6 +182,79 @@ export async function getOceanSlice(
     throw new OceanApiError(
       `OceanLens backend unavailable — unable to load real ocean data: ${msg}`,
       '/slice',
+      true
+    );
+  }
+}
+
+/**
+ * Fetches a 3D ocean volume from FastAPI GET /volume
+ *
+ * The volume contains:
+ *   depth × latitude × longitude
+ *
+ * Example:
+ * GET /volume?variable=thetao&time_index=0
+ */
+export async function getOceanVolume(
+  variable: string,
+  timeIndex: number
+): Promise<OceanVolume> {
+  const query = new URLSearchParams({
+    variable,
+    time_index: String(timeIndex),
+  });
+
+  const url = `${activeApiUrl}/volume?${query.toString()}`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new OceanApiError(
+        `Failed to fetch 3D ocean volume for ${variable} (HTTP ${res.status}: ${res.statusText})`,
+        '/volume',
+        false,
+        res.status
+      );
+    }
+
+    const data: OceanVolume = await res.json();
+
+    // Validate the 3D volume structure
+    if (
+      !Array.isArray(data.depth) ||
+      !Array.isArray(data.latitude) ||
+      !Array.isArray(data.longitude) ||
+      !Array.isArray(data.values)
+    ) {
+      throw new OceanApiError(
+        'Invalid 3D volume data structure received from FastAPI backend.',
+        '/volume',
+        false
+      );
+    }
+
+    return data;
+  } catch (err: unknown) {
+    if (err instanceof OceanApiError) {
+      throw err;
+    }
+
+    const msg = err instanceof Error ? err.message : String(err);
+
+    throw new OceanApiError(
+      `OceanLens backend unavailable — unable to load 3D ocean volume: ${msg}`,
+      '/volume',
       true
     );
   }
